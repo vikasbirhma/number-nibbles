@@ -1,3 +1,11 @@
+/**
+ * Pure game logic for Number Nibbles.
+ * This file is intentionally UI-free so behavior is deterministic and testable.
+ */
+
+/**
+ * Cardinal movement vectors used by both keyboard and touch controls.
+ */
 export const DIRECTIONS = {
   up: { x: 0, y: -1 },
   down: { x: 0, y: 1 },
@@ -18,6 +26,10 @@ const OPS = {
   mul: { op: "×", fn: (a, b) => a * b },
 };
 
+/**
+ * Creates the initial state for a level.
+ * The snake starts centered, facing right, with the first question pre-spawned.
+ */
 export function createGame({
   rows = 20,
   cols = 20,
@@ -54,12 +66,23 @@ export function createGame({
   return state;
 }
 
+/**
+ * Queues the next direction while preventing immediate 180-degree turns.
+ */
 export function setDirection(state, dir) {
   if (!DIRECTIONS[dir]) return state;
   if (OPPOSITE[dir] === state.dir) return state;
   return { ...state, nextDir: dir };
 }
 
+/**
+ * Advances the game by one tick.
+ * Order of operations:
+ * 1) Move head with wraparound.
+ * 2) Check self collision.
+ * 3) Resolve food collision and question progression.
+ * 4) Apply growth/tail removal.
+ */
 export function step(state, rng = Math.random) {
   if (!state.alive) return state;
 
@@ -135,6 +158,10 @@ export function step(state, rng = Math.random) {
   };
 }
 
+/**
+ * Generates one question and places two answer foods in unoccupied cells.
+ * Works for both arithmetic prompts and compare-number prompts.
+ */
 export function spawnQuestionAndFoods(state, rng = Math.random) {
   const question = createQuestion(rng, state.config);
   const answers = shuffle(
@@ -156,6 +183,12 @@ export function spawnQuestionAndFoods(state, rng = Math.random) {
   return { foods, question };
 }
 
+/**
+ * Builds a single question payload from level config.
+ * Supports:
+ * - questionType = "compare"  -> greater/smaller prompts
+ * - questionType = "math"     -> add/sub/mul prompts
+ */
 export function createQuestion(rng = Math.random, config = defaultConfig()) {
   const merged = { ...defaultConfig(), ...config };
   if (merged.questionType === "compare") {
@@ -219,6 +252,9 @@ export function createQuestion(rng = Math.random, config = defaultConfig()) {
   };
 }
 
+/**
+ * Returns up to `count` unique empty board cells.
+ */
 export function pickEmptyCells(state, occupied, count, rng = Math.random) {
   const empty = [];
   for (let y = 0; y < state.rows; y += 1) {
@@ -245,6 +281,9 @@ function shuffle(list, rng = Math.random) {
   return next;
 }
 
+/**
+ * Default level configuration. Individual levels override these fields.
+ */
 export function defaultConfig() {
   return {
     ops: ["add", "sub"],
@@ -262,6 +301,9 @@ export function defaultConfig() {
   };
 }
 
+/**
+ * Picks a random value either from an allow-list or from a numeric range.
+ */
 function pickNumber(rng, min, max, allowed) {
   if (Array.isArray(allowed) && allowed.length > 0) {
     return allowed[Math.floor(rng() * allowed.length)];
@@ -269,6 +311,10 @@ function pickNumber(rng, min, max, allowed) {
   return min + Math.floor(rng() * (max - min + 1));
 }
 
+/**
+ * Tries to produce an addition that crosses 10 (for bridge-ten practice).
+ * Falls back to any valid pair after bounded attempts.
+ */
 function findBridgeAdd(rng, minA, maxA, minB, maxB, picksA, picksB) {
   for (let i = 0; i < 30; i += 1) {
     const a = pickNumber(rng, minA, maxA, picksA);
@@ -278,6 +324,10 @@ function findBridgeAdd(rng, minA, maxA, minB, maxB, picksA, picksB) {
   return [pickNumber(rng, minA, maxA, picksA), pickNumber(rng, minB, maxB, picksB)];
 }
 
+/**
+ * Tries to produce subtraction pairs that require crossing a tens boundary.
+ * Falls back to a valid non-negative pair when needed.
+ */
 function findBridgeSub(rng, minA, maxA, minB, maxB, picksA, picksB) {
   for (let i = 0; i < 30; i += 1) {
     const a = pickNumber(rng, minA, maxA, picksA);

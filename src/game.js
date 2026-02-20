@@ -1,5 +1,15 @@
 import { createGame, setDirection, step } from "./logic.js";
 
+/**
+ * Browser runtime for Number Nibbles.
+ * Responsibilities:
+ * - Bind DOM controls and accessibility toggles.
+ * - Drive the render loop and countdown timer.
+ * - Orchestrate level selection/unlock UI.
+ * - Translate keyboard/touch input into direction updates.
+ */
+
+// Primary rendering surface and HUD nodes.
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const scoreEl = document.getElementById("score");
@@ -24,12 +34,14 @@ const overlayUnlockEl = document.getElementById("overlayUnlock");
 const overlayRetryBtn = document.getElementById("overlayRetry");
 const overlayNextBtn = document.getElementById("overlayNext");
 
+// Game tuning constants.
 const GRID_SIZE = 20;
 const BASE_TICK_MS = 140;
 const LEVEL_COUNT = 10;
 const QUESTIONS_PER_LEVEL = 10;
 const LEVEL_TIME_LIMIT_MS = 100_000;
 
+// Curriculum and speed profile per level.
 const LEVELS = [
   {
     label: "1",
@@ -51,6 +63,7 @@ const LEVELS = [
   { label: "10", ops: ["add", "sub", "mul"], minA: 0, maxA: 12, minB: 0, maxB: 12, noNegatives: true, speed: 95 },
 ];
 
+// Mutable runtime state owned by the UI layer.
 let state = createGame({
   rows: GRID_SIZE,
   cols: GRID_SIZE,
@@ -71,6 +84,10 @@ let highContrast = false;
 let largeText = false;
 let touchStartPoint = null;
 
+/**
+ * Draws the full board for the current state.
+ * The canvas is redrawn per tick rather than incrementally patched.
+ */
 function draw() {
   const cellSize = canvas.width / state.cols;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -115,6 +132,9 @@ function draw() {
   });
 }
 
+/**
+ * Synchronizes all user-visible HUD labels/buttons from current state.
+ */
 function updateHUD() {
   scoreEl.textContent = state.score;
   questionEl.textContent = state.question?.text ?? "---";
@@ -144,6 +164,9 @@ function updateHUD() {
   lastScore = state.score;
 }
 
+/**
+ * Applies visual accessibility modes and keeps toggle labels in sync.
+ */
 function applyA11y() {
   document.body.classList.toggle("high-contrast", highContrast);
   document.body.classList.toggle("large-text", largeText);
@@ -153,6 +176,9 @@ function applyA11y() {
   textToggle.textContent = largeText ? "Small Text" : "Large Text";
 }
 
+/**
+ * Restores persisted accessibility preferences.
+ */
 function loadA11y() {
   highContrast = localStorage.getItem("snake_contrast") === "1";
   largeText = localStorage.getItem("snake_text") === "1";
@@ -171,10 +197,16 @@ function toggleText() {
   applyA11y();
 }
 
+/**
+ * Mobile breakpoint shared by menu logic and responsive behavior.
+ */
 function isMobileViewport() {
   return window.matchMedia("(max-width: 879px)").matches;
 }
 
+/**
+ * Opens/closes the mobile levels drawer and backdrop.
+ */
 function setLevelsMenu(open) {
   const show = open && isMobileViewport();
   levelsPanel.classList.toggle("open", show);
@@ -183,6 +215,13 @@ function setLevelsMenu(open) {
   levelsBackdrop.classList.toggle("open", show);
 }
 
+/**
+ * Main loop step:
+ * - advance simulation
+ * - update countdown
+ * - render
+ * - handle terminal conditions
+ */
 function tick() {
   if (!running || paused) return;
   state = step(state);
@@ -199,6 +238,10 @@ function tick() {
   }
 }
 
+/**
+ * Starts the interval loop.
+ * Timer baseline is initialized lazily so paused time is excluded.
+ */
 function startLoop() {
   if (running) return;
   running = true;
@@ -210,6 +253,9 @@ function startLoop() {
   updateHUD();
 }
 
+/**
+ * Stops the interval loop but preserves state.
+ */
 function stopLoop() {
   if (timer) {
     clearInterval(timer);
@@ -219,6 +265,9 @@ function stopLoop() {
   updateHUD();
 }
 
+/**
+ * Reinitializes the currently selected level.
+ */
 function restart() {
   stopLoop();
   state = createGame({
@@ -241,6 +290,10 @@ function handleDirection(dir) {
   state = setDirection(state, dir);
 }
 
+/**
+ * Pause preserves elapsed time by storing accumulated runtime and
+ * resetting the active baseline timestamp until resumed.
+ */
 function togglePause() {
   if (!running || !state.alive) return;
   paused = !paused;
@@ -253,6 +306,9 @@ function togglePause() {
   updateHUD();
 }
 
+/**
+ * Level-unlock persistence helpers.
+ */
 function loadUnlockedLevel() {
   const saved = Number(localStorage.getItem("snake_unlocked")) || 1;
   return Math.min(Math.max(saved, 1), LEVEL_COUNT);
@@ -262,6 +318,9 @@ function saveUnlockedLevel(level) {
   localStorage.setItem("snake_unlocked", String(level));
 }
 
+/**
+ * Rebuilds level buttons and applies lock/active states.
+ */
 function renderLevels() {
   levelsEl.innerHTML = "";
   const unlocked = loadUnlockedLevel();
@@ -275,6 +334,9 @@ function renderLevels() {
   });
 }
 
+/**
+ * Changes active level and resets level state.
+ */
 function selectLevel(index) {
   levelIndex = index;
   lastTickMs = LEVELS[levelIndex].speed ?? BASE_TICK_MS;
@@ -283,6 +345,9 @@ function selectLevel(index) {
   setLevelsMenu(false);
 }
 
+/**
+ * Shows end-of-run summary and computes unlock progression.
+ */
 function showOverlay() {
   overlayEl.classList.remove("hidden");
   const completed = state.questionIndex >= state.questionCount && state.alive;
@@ -315,6 +380,9 @@ function hideOverlay() {
   overlayEl.classList.add("hidden");
 }
 
+/**
+ * Formats milliseconds as m:ss for HUD and overlay.
+ */
 function formatTime(ms) {
   const totalSeconds = Math.floor(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
@@ -322,6 +390,7 @@ function formatTime(ms) {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
+// Keyboard controls: arrows/WASD for movement, Space for pause.
 window.addEventListener("keydown", (event) => {
   const key = event.key.toLowerCase();
   if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(key)) {
@@ -382,6 +451,10 @@ window.addEventListener("resize", () => {
   }
 });
 
+/**
+ * Converts tap coordinates to a direction relative to the snake head.
+ * Used for quick tap-to-steer on touch devices.
+ */
 function directionFromTouchPoint(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
   const x = ((clientX - rect.left) / rect.width) * canvas.width;
@@ -397,6 +470,9 @@ function directionFromTouchPoint(clientX, clientY) {
   return dy > 0 ? "down" : "up";
 }
 
+// Touch controls:
+// - swipe changes direction based on gesture axis
+// - tap steers toward tap relative to head position
 canvas.addEventListener("touchstart", (event) => {
   if (event.touches.length === 0) return;
   const touch = event.touches[0];
@@ -433,6 +509,7 @@ canvas.addEventListener("touchcancel", () => {
 contrastToggle.addEventListener("click", toggleContrast);
 textToggle.addEventListener("click", toggleText);
 
+// App bootstrap.
 renderLevels();
 restart();
 loadA11y();
